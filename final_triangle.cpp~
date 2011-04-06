@@ -1,0 +1,455 @@
+
+#include "libtarga.c"
+#include "Scene.cpp"
+#define SMALL_NUM  0.0000001
+
+int rayTriangle(Ray &ray, Triangle &triangle, Point &inter)
+{
+  
+    Point u = subPoint(triangle.v1, triangle.v0);
+    Point v = subPoint(triangle.v2, triangle.v0);
+    Point n = crossProduct(u, v);
+  
+    Point    dir, w0, w;          // ray vectors
+    float     r, a, b;             // params to calc ray-plane intersect
+
+    w0 = subPoint(ray.o, triangle.v0);
+    a = -multPoint(n, w0);
+    b = multPoint(n, ray.d);
+    if (fabs(b) < SMALL_NUM) 
+    {     // ray is parallel to triangle plane
+        if (a == 0)                // ray lies in triangle plane
+            return 2;
+        else return 0;             // ray disjoint from plane
+    }
+
+    // get intersect point of ray with triangle plane
+    r = a / b;
+    if (r < 0.0)                   // ray goes away from triangle
+        return 0;                  // => no intersect
+    // for a segment, also test if (r > 1.0) => no intersect
+
+    Point temp = multPoint(r, ray.d);
+    inter = addPoint(ray.o, temp);           // intersect point of ray and plane
+
+    // is I inside T?
+    float    uu, uv, vv, wu, wv, D;
+    uu = multPoint(u, u);
+    uv = multPoint(u, v);
+    vv = multPoint(v, v);
+    w = subPoint(inter, triangle.v0);
+    wu = multPoint(w, u);
+    wv = multPoint(w, v);
+    D = uv * uv - uu * vv;
+    
+    float s = (uv * wv - vv * wu) / D;
+    if (s < 0.0 || s > 1.0)
+        return 0;
+    
+    float t = (uv * wu - uu * wv) / D;
+    if (t < 0.0 || (s + t) > 1.0)
+        return 0;
+
+    return 1;
+}
+
+
+ bool raySphere(Ray &r, Sphere &s, float &t)
+ {
+    Point dist = subPoint(r.o, s.c);
+    float b = multPoint(r.d, dist);
+    float c = multPoint(dist, dist) - s.r*s.r;
+    float disc = b*b - c;
+    
+    if (disc < 0.0f) 
+        return false;
+    float t0 = -b - sqrtf(disc);
+    float t1 = -b + sqrtf(disc);
+    
+    bool retvalue = false;
+    if ((t0 > 0.1f) && (t0 < t))
+    {
+        t = t0;
+        retvalue = true;
+    }
+    if ((t1 > 0.1f) && (t1 < t))
+    {
+        t = t1;
+        retvalue = true;
+    }
+    return retvalue;
+ }
+
+Point transformPoint(Matrix T, Point &p1)
+{
+	Point p;
+	Matrix mp1;
+	mp1.p[0][0] = p1.x;
+	mp1.p[1][0] = p1.y;
+	mp1.p[2][0] = p1.z;
+	mp1.p[3][0] = 1.0;
+	Matrix mp = multMat(T, mp1);
+	p.x = mp.p[0][0];
+	p.y = mp.p[1][0];
+	p.z = mp.p[2][0];
+	return p;
+}
+
+
+int draw(Scene& myScene)
+{
+
+    unsigned char* img;
+    img = (unsigned char*)tga_create(myScene.width, myScene.height, TGA_TRUECOLOR_24);
+    int img_index = 0;
+    
+    for(int m = 0; m<myScene.height*myScene.width*3; m++)
+      img[m]=0;
+    
+  
+    for(int y = 0; y < myScene.height; y++)
+      for(int x = 0; x < myScene.width; x++)
+      {		Ray viewRay;
+		viewRay.o.x = x;
+		viewRay.o.y = y;
+		viewRay.o.z = -1000.0;
+		viewRay.d.x = 0.0;
+		viewRay.d.y = 0.0;
+		viewRay.d.z = 1.0;
+		viewRay.reflected = 0;
+		float red = 0, green = 0, blue = 0; 
+		float coef = 1.0;
+		int level = 0;
+		int repeatFlag = 0;
+		int lastfrontSphere = -1;
+		int frontSphere = -1;
+		int lastfrontTriangle = -1;
+		int frontTriangle = -1;
+		
+		do{
+			Point inter;
+			Point frontInter;
+			float t_inter;
+			Matrix iMat;
+			Ray newviewRay;
+			int triangleisFront, sphereisFront;
+			int flag;
+			
+			if(repeatFlag==0)
+			{	
+				int ret_val_trngl = 0;
+				flag = 1;
+				float t = 2000.0;
+				frontSphere = -1;
+				frontTriangle = -1;
+				sphereisFront = 0;
+				triangleisFront = 0;
+				
+				for(int i = 0; i<myScene.spheres.size(); i++)
+				{	if(myScene.spheres[i].transformed==0)	
+					{	if(raySphere(viewRay, myScene.spheres[i], t))
+						{	frontSphere = i;
+							t_inter = t;
+						}
+					}
+					
+					else if(myScene.spheres[i].transformed==1)
+					{	if(lastfrontSphere!=i)	
+						{	if(viewRay.reflected == 0)
+							{	Matrix temp_iMat = invMat(myScene.spheres[i].mat);
+								Ray temp_newviewRay;
+								temp_newviewRay.o = transformPoint(temp_iMat, viewRay.o);
+								temp_newviewRay.o = subPoint(temp_newviewRay.o, myScene.spheres[i].tlate);// we have to sub since it is a inverse transform
+								temp_newviewRay.d = transformPoint(temp_iMat, viewRay.d);
+
+								if(raySphere(temp_newviewRay, myScene.spheres[i], t))
+								{	    frontSphere = i;
+									    iMat = temp_iMat;
+									    t_inter = t;
+									    newviewRay = temp_newviewRay;
+									    newviewRay.reflected = 0;
+								}
+							}
+							else
+							{	Matrix temp_iMat = invMat(myScene.spheres[i].mat);
+								if(raySphere(viewRay, myScene.spheres[i], t))
+								{	frontSphere = i;
+									iMat = temp_iMat;
+									t_inter = t;
+									newviewRay = viewRay;
+									newviewRay.reflected = 0;
+								}
+							}  
+						}
+					}
+				}
+				
+				viewRay.reflected = 0;
+				
+				for(int i = 0; i<myScene.triangles.size(); i++)
+				{	ret_val_trngl = rayTriangle(viewRay, myScene.triangles[i], inter);
+					if((ret_val_trngl==1)&&(lastfrontTriangle!=i))
+					{	frontTriangle = i;
+						frontInter = inter;
+					}
+				}
+				
+				if(frontSphere==-1)
+					if(frontTriangle==-1)
+					{	flag = 0;
+						triangleisFront = 0;
+						sphereisFront = 0;
+						break;
+					}	
+					else 
+					{	triangleisFront = 1;
+						sphereisFront = 0;
+					}
+					
+				if(frontSphere!=-1)
+					if(frontTriangle==-1)
+					{	triangleisFront = 0;
+						sphereisFront = 1;
+					}	
+					else 
+					{	triangleisFront = 1;
+						sphereisFront = 1;
+					}	
+			}
+			
+			repeatFlag = 0;
+			
+			if((sphereisFront==1)&&(triangleisFront==0))
+			{	
+				if(myScene.spheres[frontSphere].transformed==0)
+				{	Point tempo = multPoint(t_inter, viewRay.d);
+					Point newStart = addPoint(viewRay.o, tempo);
+					Point n = subPoint(newStart, myScene.spheres[frontSphere].c);
+					float temp = multPoint(n, n);
+					if (temp == 0.0f) 
+						break;
+					temp = 1.0f / sqrtf(temp); 
+					n = multPoint(temp, n);			//normal
+				
+					Material currentMat = myScene.materials[myScene.spheres[frontSphere].materialId];
+					
+					for (int j = 0; j < myScene.lights.size(); j++) 
+					{
+						Light light = myScene.lights[j];
+						Point dist = subPoint(light.pos, newStart);
+						
+						if (multPoint(n, dist) <= 0.0f)
+						  continue;
+						
+						float t = sqrtf(multPoint(dist, dist));
+
+						if ( t <= 0.0f )
+						  continue;
+						  
+						Ray lightRay;
+						lightRay.o = newStart;
+						lightRay.d = multPoint((1/t), dist);
+						
+						bool inShadow = false; 
+						
+						for (int k = 0; k < myScene.spheres.size(); k++) 
+						{
+						    if (raySphere(lightRay, myScene.spheres[k], t)) 
+						    {	inShadow = true;
+							break;
+						    }
+						}
+						
+						if (!inShadow) 
+						{    // lambert
+						    float lambert = multPoint(n, lightRay.d) * coef;
+						    red += lambert * light.col.r * currentMat.r;
+						    green += lambert * light.col.g * currentMat.g;
+						    blue += lambert * light.col.b * currentMat.b;
+						}
+						
+					}
+					
+					coef *= currentMat.reflection;
+					float reflet = 2.0f * multPoint(viewRay.d, n);
+					viewRay.o = newStart;
+					Point temp_2 = multPoint(reflet, n);
+					viewRay.d = subPoint(viewRay.d, temp_2);
+					viewRay.reflected = 0;
+					level++;
+				}
+				
+				else if (myScene.spheres[frontSphere].transformed==1)
+				{	
+					Point tempo = multPoint(t_inter, newviewRay.d);
+					Point newStart = addPoint(newviewRay.o, tempo);			//intersection point in sphere space
+					Point newStart_2 = transformPoint(myScene.spheres[frontSphere].mat, newStart);//intersection point in ellipsoid space
+					newStart_2 = addPoint(newStart_2, myScene.spheres[frontSphere].tlate); 
+					
+					Point n = subPoint(newStart, myScene.spheres[frontSphere].c);
+					float temp = multPoint(n, n);
+					if (temp == 0.0f) 
+						break;
+					temp = 1.0f / sqrtf(temp); 
+					n = multPoint(temp, n);
+					
+					//convert normal to new worldspace
+					Matrix iMat_2 = transMat(iMat);
+					Point n_orig = n;
+					n = transformPoint(iMat_2, n);
+					
+					Material currentMat = myScene.materials[myScene.spheres[frontSphere].materialId];
+
+					for (int j = 0; j < myScene.lights.size(); j++) 
+					{
+						Light light = myScene.lights[j];
+						Point dist = subPoint(light.pos, newStart_2);
+						
+						if (multPoint(n, dist) <= 0.0f)
+						  continue;
+						
+						float t2 = sqrtf(multPoint(dist, dist));
+						if ( t2 <= 0.0f )
+						  continue;
+						  
+						Ray lightRay;
+						lightRay.o = newStart_2;
+						lightRay.d = multPoint((1/t2), dist);
+						lightRay.reflected = 0;
+						
+						Point dist_temp = subPoint(light.pos, newStart);
+						float t_temp = sqrtf(multPoint(dist_temp, dist_temp));
+						
+						bool inShadow = false; 
+						Ray newlightRay;
+						
+						for (int k = 0; k < myScene.spheres.size(); k++) 
+						{
+						    newlightRay.o = newStart;
+						    newlightRay.d = transformPoint(iMat, lightRay.d);
+						    newlightRay.reflected = 0;
+						    
+						    if((k!=frontSphere) && (k!=lastfrontSphere))
+							if (raySphere(newlightRay, myScene.spheres[k], t_temp)) 
+							{	inShadow = true;
+								break;
+							}
+						}
+						
+						if (!inShadow) 
+						{    // lambert
+						    float lambert = multPoint(n, lightRay.d) * coef;
+						    red += lambert * light.col.r * currentMat.r;
+						    green += lambert * light.col.g * currentMat.g;
+						    blue += lambert * light.col.b * currentMat.b;
+						}
+						
+						
+					}
+					lastfrontSphere = frontSphere;
+					coef *= currentMat.reflection;
+					float reflet = 2.0f * multPoint(newviewRay.d, n_orig);
+					viewRay.o = newStart_2;
+					Point temp_2 = multPoint(reflet, n_orig);
+					viewRay.d = subPoint(newviewRay.d, temp_2);
+					viewRay.reflected = 1;
+					level++;
+				}
+			}
+
+			else if((sphereisFront==0)&&(triangleisFront==1))
+			{
+				Point u_n = subPoint(myScene.triangles[frontTriangle].v1, frontInter);
+				Point v_n = subPoint(myScene.triangles[frontTriangle].v2, frontInter);
+				Point n = crossProduct(v_n, u_n);		//pay attention here
+				
+				float temp = multPoint(n, n);
+				if (temp == 0.0f) 
+					flag = 0;
+
+				temp = 1.0f / sqrtf(temp); 
+				n = multPoint(temp, n);			//normal
+				
+				Material currentMat = myScene.materials[myScene.triangles[frontTriangle].materialId];
+				
+				for (int j = 0; j < myScene.lights.size(); j++) 
+				{
+					Light light = myScene.lights[j];
+					Point dist = subPoint(light.pos, frontInter);
+					
+					if (multPoint(n, dist) <= 0.0f)
+					  continue;
+					
+					float t = sqrtf(multPoint(dist, dist));
+
+					if ( t <= 0.0f )
+					  continue;
+					  
+					Ray lightRay;
+					lightRay.o = frontInter;
+					lightRay.d = multPoint((1/t), dist);
+					
+					Point temp_inter;
+					
+					for (int k = 0; k < myScene.triangles.size(); k++) 
+					{
+					    if((k!=frontTriangle) && (k!=lastfrontTriangle))
+						if ((rayTriangle(lightRay, myScene.triangles[k], temp_inter)==1)) 
+						{   flag = 0;
+						    break;
+						}
+					}
+					
+					if(flag == 1)
+					{	float lambert = multPoint(n, lightRay.d) * coef;
+						red += lambert * light.col.r * currentMat.r;
+						green += lambert * light.col.g * currentMat.g;
+						blue += lambert * light.col.b * currentMat.b;
+					}
+					
+					lastfrontTriangle = frontTriangle;	//important
+					
+				}
+				
+				coef *= currentMat.reflection;
+				float reflet = 2.0f * multPoint(viewRay.d, n);
+				viewRay.o = frontInter;
+				Point temp_2 = multPoint(reflet, n);
+				viewRay.d = subPoint(viewRay.d, temp_2);
+				viewRay.reflected = 1;
+				level++;
+			}
+			
+			else if((sphereisFront==1)&&(triangleisFront==1))
+			{
+				Point tempo = multPoint(t_inter, viewRay.d);
+				Point newStart = addPoint(viewRay.o, tempo);
+				
+				if(newStart.z <= frontInter.z)
+					triangleisFront=0;
+				else
+					sphereisFront = 0;
+			  
+				repeatFlag = 1;
+			}
+			  
+			
+		}while((coef>0.0f)&&(level<10));
+		
+		img[img_index] = (unsigned char)(min(red*255.0f, 255.0f));
+		img[img_index+1] = (unsigned char)(min(green*255.0f, 255.0f));
+		img[img_index+2] = (unsigned char)(min(blue*255.0f, 255.0f));
+		img_index = img_index+3;
+      }
+ 
+  int ret_value = tga_write_rle( "output2.tga", myScene.width, myScene.height, img, TGA_TRUECOLOR_24); 
+  return 1;
+}
+
+
+int main()
+{
+	Scene myScene;
+	bool b = init("scene.txt", myScene);
+	draw(myScene);
+}

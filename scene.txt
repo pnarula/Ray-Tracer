@@ -1,0 +1,122 @@
+///////////////////////////////////////
+//    Global scene and viewpoint     //
+/////////////////////////////////////// 
+
+Scene 
+{
+
+  Image.Width = 640; 
+  Image.Height = 480;   
+  
+  // Count the objects in the scene
+  // description will follow
+  NumberOfMaterials = 4; 
+  NumberOfSpheres = 2;
+  NumberOfAffines = 1;
+  NumberOfTriangles = 1;
+  NumberOfLights = 3; 
+}
+
+///////////////////////////////////////
+//         List of materials         //
+/////////////////////////////////////// 
+Material0
+{
+  Diffuse = 1.0, 1.0, 1.0;
+  Reflection = 0.5;
+}
+
+Material1
+{
+  Diffuse = 0.0, 1.0, 1.0;
+  Reflection = 0.5;
+}
+
+Material2
+{
+  Diffuse = 1.0, 0.5, 0.5;
+  Reflection = 0.5;
+}
+
+Material3
+{
+  Diffuse = 1.0, 0.0, 0.0;
+  Reflection = 0.5;
+}
+///////////////////////////////////////
+//         List of spheres           //
+/////////////////////////////////////// 
+Sphere0
+{
+  Center = 260.0, 300.0, 0.0;  
+  Size = 60.0;
+  Material.Id = 1;
+}
+
+Sphere1
+{
+  Center = 400.0, 300.0, 0.0;
+  Size = 75.0;
+  Material.Id = 0;
+}
+////////////////////////////////////////
+//         List of Affines            //
+////////////////////////////////////////
+AffinedSphere0
+{
+  Center = 300.0, 120.0, 0.0;
+  Size = 50;
+  Material.Id = 3;
+  Translate = 0.0, 0.0, 0.0;
+  Scalex = 1.0, 0.0, 0.0;
+  Scaley = 0.0, 1.0, 0.0;
+  Scalez = 0.0, 0.0, 1.0;
+}
+
+//////////////////////////////////////////
+//         List of Triangles            //
+//////////////////////////////////////////
+//Triangle0
+//{
+//  V0 = 260.0, 120.0, -100.0;
+//  V1 = 320.0, 100.0, 0.0;
+//  V2 = 320.0, 140.0, 0.0;
+//  Material.Id = 1;
+//}
+
+//Triangle1
+//{
+//  V0 = 321.0, 100.0, 0.0;
+//  V1 = 381.0, 120.0, -100.0;
+//  V2 = 321.0, 140.0, 0.0;
+//  Material.Id = 0;
+//}
+
+Triangle0
+{
+  V0 = 200.0, 200.0, 50.0;
+  V1 = 450.0, 200.0, 50.0;
+  V2 = 330.0, 300.0, 90.0;
+  Material.Id = 2;
+}
+///////////////////////////////////////
+//         List of lights            //
+/////////////////////////////////////// 
+Light0
+{
+  Position = 0.0, 480.0, -100.0;  
+  Intensity = 0.7, 0.7, 0.7 ;
+}
+
+Light1
+{
+  Position = 640.0, 480.0, -100.0;  
+  Intensity = 0.7, 0.7, 0.7 ;
+}
+
+Light2
+{
+  Position = 640.0, 240.0, -10000.0; 
+  Intensity = 0.6, 0.7, 1.0;
+}
+
